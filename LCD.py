@@ -5,13 +5,20 @@ from argparse import Namespace
 
 class LCD:
     LCD_WIDTH = 16  # LCD Character width
-    LCD_LINE_1 = 0x80  # Address of first line
-    LCD_LINE_2 = 0xC0  # Address of second line
+    LCD_LINES = 2   # LCD Character lines
     LCD_CHR = gpio.HIGH
     LCD_CMD = gpio.LOW
     E_PULSE = 0.0005
     E_DELAY = 0.0005
     pins = None
+    DDRAM_cmd = 0b10000000
+
+    lines = [
+        0x0,
+        0x40,
+        0x14,
+        0x54,
+    ]
 
     def __init__(self, pin_assignment):
         self.pins = Namespace(**pin_assignment)
@@ -80,9 +87,14 @@ class LCD:
     
     def send_message(self, message):
         # message = message.ljust(self.LCD_WIDTH, " ")
+        line_count = 1
         for i in message:
             if i == '\n':
-                self.send_byte(0xC0, self.LCD_CMD)
+                if line_count > self.LCD_LINES - 1:
+                    print "Too Many Newlines"
+                    return
+                line_count += 1
+                self.go_to_line(line_count)
             else:
                 self.send_byte(ord(i), self.LCD_CHR)
         pass
@@ -92,13 +104,19 @@ class LCD:
             print "Index must be between 0 and 8"
             return
         index = index * 8
-        CGRAM_cmd = 0b1000000
-        CGRAM_address = CGRAM_cmd + index
-        self.send_byte(CGRAM_address, self.LCD_CMD)
+        cgram_cmd = 0b1000000
+        cgram_address = cgram_cmd + index
+        self.send_byte(cgram_address, self.LCD_CMD)
         for i in char_data:
             self.send_byte(i, self.LCD_CHR)
-        first_DDRAM = 0b0010000000
+        first_DDRAM = 0b0010000000  # type: int
         self.send_byte(first_DDRAM, self.LCD_CMD)
 
-    def clear_screen(self):
+    def clr(self):
         self.send_byte(0x01, self.LCD_CMD)
+
+    def go_to_line(self, linenum):
+        if linenum > self.LCD_LINES or linenum < 1:
+            print "Valid line numbers [1-{}]".format(self.LCD_LINES)
+            return
+        self.send_byte(self.DDRAM_cmd + self.lines[linenum-1], self.LCD_CMD)
